@@ -2,11 +2,30 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Line } from 'react-chartjs-2';
-import Chart from 'chart.js/auto';
-import zoomPlugin from 'chartjs-plugin-zoom';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
 import Image from 'next/image';
 
-Chart.register(zoomPlugin);
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 type SensorData = {
   visible_ir: number;
@@ -27,11 +46,22 @@ export default function Home() {
   const [bufferedPoints, setBufferedPoints] = useState<SensorData[]>([]);
   const [status, setStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading');
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [chartReady, setChartReady] = useState(false);
   const alertSoundRef = useRef<HTMLAudioElement | null>(null);
 
+  // Load zoom plugin dynamically (client-side only)
   useEffect(() => {
-    alertSoundRef.current = new Audio('/alert.mp3');
-    alertSoundRef.current.load();
+    import('chartjs-plugin-zoom').then((zoomPlugin) => {
+      ChartJS.register(zoomPlugin.default);
+      setChartReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      alertSoundRef.current = new Audio('/alert.mp3');
+      alertSoundRef.current.load();
+    }
   }, []);
 
   useEffect(() => {
@@ -86,7 +116,7 @@ export default function Home() {
   // Chart data and options
   const chartData = {
     labels: dataPoints.map((d) =>
-      new Date(d.timestamp * 1000).toLocaleTimeString('en-GB', { hour12: false })
+      new Date(d.timestamp).toLocaleTimeString('en-GB', { hour12: false })
     ),
     datasets: [
       {
@@ -110,14 +140,19 @@ export default function Home() {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: true,
     plugins: {
       legend: { position: 'top' as const },
       tooltip: { mode: 'index' as const, intersect: false },
-      zoom: {
+      zoom: chartReady ? {
         pan: { enabled: true, mode: 'x' as const },
-        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const },
+        zoom: { 
+          wheel: { enabled: true }, 
+          pinch: { enabled: true }, 
+          mode: 'x' as const 
+        },
         limits: { x: { min: 0 } },
-      },
+      } : undefined,
     },
     scales: {
       x: { title: { display: true, text: 'Time (HH:MM:SS)' } },
@@ -174,7 +209,7 @@ export default function Home() {
           marginTop: '40px',
         }}
       >
-        TurbEye: iGEM Shaker Incubator <br />
+        iGEM Shaker Incubator <br />
         Turbidity Monitoring Device
       </h1>
 
@@ -201,7 +236,7 @@ export default function Home() {
         </span>
         {lastUpdate && (
           <span style={{ marginLeft: '16px', fontSize: '0.95em', color: '#FFDC00' }}>
-            Last update: {new Date(lastUpdate * 1000).toLocaleTimeString('en-GB', { hour12: false })}
+            Last update: {new Date(lastUpdate).toLocaleTimeString('en-GB', { hour12: false })}
           </span>
         )}
       </div>
@@ -276,6 +311,7 @@ export default function Home() {
             borderRadius: '8px',
             cursor: isPaused ? 'not-allowed' : 'pointer',
             fontWeight: 'bold',
+            opacity: isPaused ? 0.5 : 1,
           }}
         >
           Pause
@@ -291,6 +327,7 @@ export default function Home() {
             borderRadius: '8px',
             cursor: !isPaused ? 'not-allowed' : 'pointer',
             fontWeight: 'bold',
+            opacity: !isPaused ? 0.5 : 1,
           }}
         >
           Resume
@@ -308,10 +345,18 @@ export default function Home() {
           boxShadow: '0 0 20px #00000044',
         }}
       >
-        <Line data={chartData} options={chartOptions} />
-        <div style={{ color: '#FFDC00', fontSize: '0.95em', marginTop: '8px' }}>
-          <b>Tip:</b> Scroll, pinch, or drag horizontally to view previous data.
-        </div>
+        {chartReady ? (
+          <>
+            <Line data={chartData} options={chartOptions} />
+            <div style={{ color: '#FFDC00', fontSize: '0.95em', marginTop: '8px' }}>
+              <b>Tip:</b> Scroll, pinch, or drag horizontally to view previous data.
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: '100px 0', textAlign: 'center', color: '#FFDC00' }}>
+            Loading chart...
+          </div>
+        )}
       </div>
 
       <style jsx>{`
