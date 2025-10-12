@@ -70,10 +70,14 @@ export default function Home() {
     setLastUpdate(null);
 
     function fetchData() {
-      fetch(`http://${ip}/data`)
+      fetch(`/api/sensor?ip=${encodeURIComponent(ip)}`)
         .then(async (res) => {
-          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-          const json: SensorData = await res.json();
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            setStatus(dataPoints.length === 0 ? 'loading' : 'disconnected');
+            setAlert(json.error ? `Sensor error: ${json.error}` : `Failed to fetch sensor data. Status: ${res.status}`);
+            return;
+          }
           if (isPaused) {
             setBufferedPoints((prev) => [...prev, json]);
           } else {
@@ -92,9 +96,9 @@ export default function Home() {
             setAlert(null);
           }
         })
-        .catch(() => {
+        .catch((err) => {
           setStatus(dataPoints.length === 0 ? 'loading' : 'disconnected');
-          setAlert('Failed to fetch sensor data. Please check connection and IP address.');
+          setAlert('Network error: ' + err.message);
         });
     }
 
